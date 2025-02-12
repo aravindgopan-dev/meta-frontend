@@ -27,14 +27,14 @@ export default function initGame() {
     sliceX: 3,
     sliceY: 4,
     anims: {
-      'down-id': 0,
-      'up-id': 9,
-      'left-id': 4,
-      'right-id': 6,
-      left: { from: 3, to: 5, loop: true },
-      right: { from: 6, to: 8, loop: true },
-      up: { from: 9, to: 11, loop: true },
-      down: { from: 0, to: 2, loop: true },
+      'down-id': { from: 1, to: 1, loop: true },  // Looping idle frame for down movement
+      'up-id': { from: 10, to: 10, loop: true },  // Looping idle frame for up movement
+      'left-id': { from: 4, to: 4, loop: true },  // Looping idle frame for left movement
+      'right-id': { from: 7, to: 7, loop: true }, // Looping idle frame for right movement
+      left: { from: 3, to: 5, loop: true },   // Left movement (row 2)
+      right: { from: 6, to: 8, loop: true },  // Right movement (row 3)
+      up: { from: 9, to: 11, loop: true },    // Up movement (row 4)
+      down: { from: 0, to: 2, loop: true },   // Down movement (row 1)
     },
   });
 
@@ -52,7 +52,7 @@ export default function initGame() {
     k.scale(1.5),
     'player',
     {
-      speed: 800,
+      speed: 500,
       direction: k.vec2(0, 0),
     },
   ]);
@@ -64,8 +64,13 @@ export default function initGame() {
   socket.on('connect', () => {
     console.log('WebSocket Connected');
   });
+  let lastUpdateTime = 0;
 
+  const updateInterval = 50;
   socket.on('updatePlayers', (players) => {
+    const currentTime = Date.now();
+    if (currentTime - lastUpdateTime < updateInterval) return;
+    lastUpdateTime = currentTime
     // Update remote players
     Object.keys(remotePlayers).forEach((id) => {
       if (!players[id]) {
@@ -111,60 +116,77 @@ export default function initGame() {
   player.onUpdate(() => {
     player.direction.x = 0;
     player.direction.y = 0;
-
+    let moving = false;
+  
+    // Check for movement keys
     if (k.isKeyDown('left')) {
       player.direction.x = -1;
-      player.play('left');
+      if (player.getCurAnim()?.name !== 'left') {
+        player.play('left');
+      }
+      moving = true;
     }
     if (k.isKeyDown('right')) {
       player.direction.x = 1;
-      player.play('right');
+      if (player.getCurAnim()?.name !== 'right') {
+        player.play('right');
+      }
+      moving = true;
     }
     if (k.isKeyDown('up')) {
       player.direction.y = -1;
-      player.play('up');
+      if (player.getCurAnim()?.name !== 'up') {
+        player.play('up');
+      }
+      moving = true;
     }
     if (k.isKeyDown('down')) {
       player.direction.y = 1;
-      player.play('down');
+      if (player.getCurAnim()?.name !== 'down') {
+        player.play('down');
+      }
+      moving = true;
     }
-
-    if (player.direction.eq(k.vec2(0, 0))) {
+  
+    // Only switch to idle if not moving
+    if (!moving) {
       const currentAnim = player.getCurAnim()?.name;
       if (currentAnim && !currentAnim.includes('id')) {
         player.play(`${currentAnim}-id`);
       }
     }
-
+  
+    // Calculate new position
     let newPos = player.pos.clone();
     if (player.direction.x && player.direction.y) {
       newPos = newPos.add(player.direction.scale(player.speed * Diagonal * k.dt()));
     } else {
       newPos = newPos.add(player.direction.scale(player.speed * k.dt()));
     }
-
+  
+    // Boundary checks
     const playerWidth = player.width;
     const playerHeight = player.height;
-
+  
     newPos.x = Math.min(Math.max(newPos.x, playerWidth), mapWidth - playerWidth);
     newPos.y = Math.min(Math.max(newPos.y, playerHeight), mapHeight - playerHeight);
-
+  
     player.pos = newPos;
-
+  
+    // Camera position update
     const camPos = newPos.clone();
     const camWidth = k.width();
     const camHeight = k.height();
-
+  
     camPos.x = Math.min(Math.max(camPos.x, camWidth / 2), mapWidth - camWidth / 2);
     camPos.y = Math.min(Math.max(camPos.y, camHeight / 2), mapHeight - camHeight / 2);
-
+  
     k.setCamPos(camPos);
-
+  
     // Emit player's new position to server
     socket.emit('move', {
       x: player.pos.x,
       y: player.pos.y,
       direction: player.direction.clone(),
     });
-  });
-}
+  });}
