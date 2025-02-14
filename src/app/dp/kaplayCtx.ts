@@ -2,8 +2,8 @@ import kaplay from "kaplay";
 
 export default function initKaplay(){
     return kaplay({
-        width:window.innerWidth,
-        height:window.innerHeight,
+        width:30*32,
+        height:15*32,
         letterbox:true,
         global:false,
         debug:true,
