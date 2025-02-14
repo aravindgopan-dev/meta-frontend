@@ -107,7 +107,7 @@ export default function initGame() {
           k.sprite('player1'),
           k.pos(players[id].x, players[id].y),
           k.area(),
-          k.scale(1.5),
+          k.scale(1),
           'remotePlayer',
         ]);
       } else {
