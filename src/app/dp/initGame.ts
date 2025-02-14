@@ -88,7 +88,7 @@ export default function initGame() {
 
 
   socket.on('updatePlayers', (players) => {
-    const currentTime = Date.now();
+  
     
 
     // Update remote players
