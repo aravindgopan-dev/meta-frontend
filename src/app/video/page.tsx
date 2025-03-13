@@ -6,24 +6,25 @@ import Peer from "peerjs";
 const ROOM_ID = 10; // Room ID set to 10 for testing
 
 const VideoCall: React.FC = () => {
-  const [peerId, setPeerId] = useState<string>("");
   const [peers, setPeers] = useState<Record<string, MediaStream>>({});
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const socket = useRef<Socket>(io("https://meta-videoserver.onrender.com"));
   const peer = useRef<Peer>(new Peer());
 
   useEffect(() => {
-    peer.current.on("open", (id: string) => {
-      setPeerId(id);
-      socket.current.emit("join-room", ROOM_ID, id);
+    const currentPeer = peer.current;
+    const currentSocket = socket.current;
+
+    currentPeer.on("open", (id: string) => {
+      currentSocket.emit("join-room", ROOM_ID, id);
     });
 
-    socket.current.on("user-connected", (newPeerId: string) => {
+    currentSocket.on("user-connected", (newPeerId: string) => {
       console.log(`New user joined: ${newPeerId}`);
       callNewUser(newPeerId);
     });
 
-    socket.current.on("user-disconnected", (disconnectedPeerId: string) => {
+    currentSocket.on("user-disconnected", (disconnectedPeerId: string) => {
       console.log(`User disconnected: ${disconnectedPeerId}`);
       setPeers((prevPeers) => {
         const updatedPeers = { ...prevPeers };
@@ -34,7 +35,7 @@ const VideoCall: React.FC = () => {
       delete videoRefs.current[disconnectedPeerId]; // Remove video reference
     });
 
-    peer.current.on("call", (call) => {
+    currentPeer.on("call", (call) => {
       navigator.mediaDevices
         .getUserMedia({ video: true, audio: true })
         .then((stream) => {
@@ -47,8 +48,8 @@ const VideoCall: React.FC = () => {
     });
 
     return () => {
-      peer.current.disconnect();
-      socket.current.disconnect();
+      currentPeer.disconnect();
+      currentSocket.disconnect();
     };
   }, []);
 
