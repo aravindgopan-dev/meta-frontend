@@ -9,7 +9,25 @@ const VideoCall: React.FC = () => {
   const [peers, setPeers] = useState<Record<string, MediaStream>>({});
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const socket = useRef<Socket>(io("https://meta-videoserver.onrender.com"));
-  const peer = useRef<Peer>(new Peer());
+  const peer = useRef<Peer>(new Peer({
+    config: {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { 
+          urls: "turn:numb.viagenie.ca",
+          username: "webrtc@live.com",
+          credential: "muazkh"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        }
+      ]
+    },
+    debug: 3
+  }));
 
   useEffect(() => {
     const currentPeer = peer.current;
