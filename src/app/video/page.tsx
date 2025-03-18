@@ -2,36 +2,54 @@
 import React, { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import Peer from "peerjs";
+import { MdMic, MdMicOff, MdVideocam, MdVideocamOff, MdCallEnd } from "react-icons/md";
 
-const ROOM_ID = 10; // Room ID set to 10 for testing
+const ROOM_ID = 10; // Room ID for testing
 
 const VideoCall: React.FC = () => {
   const [peers, setPeers] = useState<Record<string, MediaStream>>({});
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const socket = useRef<Socket>(io("https://meta-videoserver.onrender.com"));
-  const peer = useRef<Peer>(new Peer({
-    config: {
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { 
-          urls: "turn:numb.viagenie.ca",
-          username: "webrtc@live.com",
-          credential: "muazkh"
-        },
-        {
-          urls: "turn:openrelay.metered.ca:80",
-          username: "openrelayproject",
-          credential: "openrelayproject"
-        }
-      ]
-    },
-    debug: 3
-  }));
+  const peer = useRef<Peer>(
+    new Peer({
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          {
+            urls: "turn:numb.viagenie.ca",
+            username: "webrtc@live.com",
+            credential: "muazkh",
+          },
+          {
+            urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+          },
+        ],
+      },
+      debug: 3,
+    })
+  );
+
+  // Local stream state
+  const localStream = useRef<MediaStream | null>(null);
+  const [isMicOn, setIsMicOn] = useState(true);
+  const [isCameraOn, setIsCameraOn] = useState(true);
 
   useEffect(() => {
     const currentPeer = peer.current;
     const currentSocket = socket.current;
+
+    navigator.mediaDevices
+      .getUserMedia({ video: true, audio: true })
+      .then((stream) => {
+        localStream.current = stream;
+        if (videoRefs.current["self"]) {
+          videoRefs.current["self"].srcObject = stream;
+        }
+      })
+      .catch((error) => console.error("Error accessing media devices:", error));
 
     currentPeer.on("open", (id: string) => {
       currentSocket.emit("join-room", ROOM_ID, id);
@@ -72,27 +90,13 @@ const VideoCall: React.FC = () => {
   }, []);
 
   const callNewUser = (newPeerId: string) => {
-    navigator.mediaDevices
-      .getUserMedia({ video: true, audio: true })
-      .then((stream) => {
-        const call = peer.current.call(newPeerId, stream);
-        call.on("stream", (remoteStream) => {
-          setPeers((prevPeers) => ({ ...prevPeers, [newPeerId]: remoteStream }));
-        });
-      })
-      .catch((error) => console.error("Error accessing media devices:", error));
-  };
+    if (!localStream.current) return;
 
-  useEffect(() => {
-    navigator.mediaDevices
-      .getUserMedia({ video: true, audio: true })
-      .then((stream) => {
-        if (videoRefs.current["self"]) {
-          videoRefs.current["self"].srcObject = stream;
-        }
-      })
-      .catch((error) => console.error("Error accessing media devices:", error));
-  }, []);
+    const call = peer.current.call(newPeerId, localStream.current);
+    call.on("stream", (remoteStream) => {
+      setPeers((prevPeers) => ({ ...prevPeers, [newPeerId]: remoteStream }));
+    });
+  };
 
   useEffect(() => {
     Object.entries(peers).forEach(([id, stream]) => {
@@ -102,35 +106,76 @@ const VideoCall: React.FC = () => {
     });
   }, [peers]);
 
-  return (
-    <div>
-      <h2>Room: {ROOM_ID}</h2>
-      <video
-        autoPlay
-        playsInline
-        muted
-        ref={(ref) => {
-          if (ref) {
-            videoRefs.current["self"] = ref;
-          }
-        }}
-        style={{ width: "300px", border: "2px solid #fff", margin: "10px" }}
-      ></video>
+  // Toggle Mic
+  const toggleMic = () => {
+    if (localStream.current) {
+      localStream.current.getAudioTracks().forEach((track) => {
+        track.enabled = !track.enabled;
+      });
+      setIsMicOn((prev) => !prev);
+    }
+  };
 
-      {Object.entries(peers).map(([id, stream]) => (
+  // Toggle Camera
+  const toggleCamera = () => {
+    if (localStream.current) {
+      localStream.current.getVideoTracks().forEach((track) => {
+        track.enabled = !track.enabled;
+      });
+      setIsCameraOn((prev) => !prev);
+    }
+  };
+
+  return (
+    <div className="h-screen flex flex-col items-center justify-center bg-gray-900 text-white">
+      <h2 className="text-lg font-bold mb-4">Room: {ROOM_ID}</h2>
+      
+      <div className="flex flex-wrap justify-center gap-4">
+        {/* Self Video */}
         <video
-          key={id}
           autoPlay
           playsInline
+          muted
           ref={(ref) => {
-            if (ref) {
-              videoRefs.current[id] = ref;
-              ref.srcObject = stream;
-            }
+            if (ref) videoRefs.current["self"] = ref;
           }}
-          style={{ width: "300px", border: "2px solid #fff", margin: "10px" }}
+          className="w-64 h-40 border-2 border-white rounded-lg"
         ></video>
-      ))}
+
+        {/* Other Peers */}
+        {Object.entries(peers).map(([id, stream]) => (
+          <video
+            key={id}
+            autoPlay
+            playsInline
+            ref={(ref) => {
+              if (ref) {
+                videoRefs.current[id] = ref;
+                ref.srcObject = stream;
+              }
+            }}
+            className="w-64 h-40 border-2 border-white rounded-lg"
+          ></video>
+        ))}
+      </div>
+
+      {/* Control Buttons */}
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex gap-4 bg-gray-800 p-3 rounded-lg">
+        {/* Mic Button */}
+        <button onClick={toggleMic} className="p-2 bg-gray-700 rounded-full">
+          {isMicOn ? <MdMic size={24} color="white" /> : <MdMicOff size={24} color="red" />}
+        </button>
+
+        {/* Camera Button */}
+        <button onClick={toggleCamera} className="p-2 bg-gray-700 rounded-full">
+          {isCameraOn ? <MdVideocam size={24} color="white" /> : <MdVideocamOff size={24} color="red" />}
+        </button>
+
+        {/* End Call Button */}
+        <button className="p-2 bg-red-600 rounded-full">
+          <MdCallEnd size={24} color="white" />
+        </button>
+      </div>
     </div>
   );
 };
